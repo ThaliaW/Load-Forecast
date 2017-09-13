@@ -10,10 +10,11 @@ library(leaps)
 library(httr)
 library(HH)
 library(plsdepot)
+library(pls)
 
-ct<-"Catawissa"
-city<-"Catawissa"
-zipCode<-17820
+ct<-"Blakely"
+city<-"Blakely"
+zipCode<-18452
 
 #Get the historical load data(monthly)
 data<-read.csv("historical load.csv",header=TRUE,sep=",")
@@ -28,15 +29,15 @@ ts<-ts(na.omit(as.numeric(load)),start=c(2007,1),end=c(2017,0),frequency=12)
 
 # Yearly mean load
 load.bar<-c(mean(window(ts, start=c(2007,1), end=c(2008,0))),mean(window(ts, start=c(2008,1), end=c(2009,0))),mean(window(ts, start=c(2009,1), end=c(2010,0))),
-  mean(window(ts, start=c(2010,1), end=c(2011,0))),mean(window(ts, start=c(2011,1), end=c(2012,0))),mean(window(ts, start=c(2012,1), end=c(2013,0))),
-  mean(window(ts, start=c(2013,1), end=c(2014,0))),mean(window(ts, start=c(2014,1), end=c(2015,0))),mean(window(ts, start=c(2015,1), end=c(2016,0))),
-  mean(window(ts, start=c(2016,1), end=c(2017,0))))
+            mean(window(ts, start=c(2010,1), end=c(2011,0))),mean(window(ts, start=c(2011,1), end=c(2012,0))),mean(window(ts, start=c(2012,1), end=c(2013,0))),
+            mean(window(ts, start=c(2013,1), end=c(2014,0))),mean(window(ts, start=c(2014,1), end=c(2015,0))),mean(window(ts, start=c(2015,1), end=c(2016,0))),
+            mean(window(ts, start=c(2016,1), end=c(2017,0))))
 
 # Monthly normalized load
 load.dot<-rbind(window(ts, start=c(2007,1), end=c(2008,0))/load.bar[1],window(ts, start=c(2008,1), end=c(2009,0))/load.bar[1],window(ts, start=c(2009,1), end=c(2010,0))/load.bar[1],
-            window(ts, start=c(2010,1), end=c(2011,0))/load.bar[1],window(ts, start=c(2011,1), end=c(2012,0))/load.bar[1],window(ts, start=c(2012,1), end=c(2013,0))/load.bar[1],
-            window(ts, start=c(2013,1), end=c(2014,0))/load.bar[1],window(ts, start=c(2014,1), end=c(2015,0))/load.bar[1],window(ts, start=c(2015,1), end=c(2016,0))/load.bar[1],
-            window(ts, start=c(2016,1), end=c(2017,0))/load.bar[1])
+                window(ts, start=c(2010,1), end=c(2011,0))/load.bar[1],window(ts, start=c(2011,1), end=c(2012,0))/load.bar[1],window(ts, start=c(2012,1), end=c(2013,0))/load.bar[1],
+                window(ts, start=c(2013,1), end=c(2014,0))/load.bar[1],window(ts, start=c(2014,1), end=c(2015,0))/load.bar[1],window(ts, start=c(2015,1), end=c(2016,0))/load.bar[1],
+                window(ts, start=c(2016,1), end=c(2017,0))/load.bar[1])
 
 histload<-data.frame(ts,load.bar,load.dot)
 
@@ -186,28 +187,37 @@ corrplot.mixed(cor(hiseco.Data[,2:5]),upper="ellipse")
 eco.model<-data.frame(load.bar,hiseco.Data[,2:5])
 colnames(eco.model)<-c("yearlyLoad","totalPopulation","totalEmployment","totalHouseholds","totalRetail")
 
-# try.fit<-plsreg1(eco.model[,-1], eco.model[,1],comps = 4)
-# plot(pls1)
-# plot(seq(2007,2016,length=10),load.bar,type="b",xlab="Time")
-# lines(seq(2007,2016,length=10),pls1$y.pred,col="red")
-# legend("topright",c("original data","fitted data"),col=c("black","red"),lty=c(1,1),bty="n")
+tryfit.eco<-plsr(yearlyLoad~.,data=eco.model,validation="CV")
+ncomp<-which.min(tryfit.eco$validation$adj)
+fit.eco<-tryfit.eco$fitted.values[,,ncomp]
 
-tryfit.eco<-regsubsets(yearlyLoad~.,data=eco.model)
-selection2<-which.min(summary(tryfit.eco)$bic)
-fit.eco<-lm.regsubsets(tryfit.eco,selection2)
+
+# tryfit.eco<-regsubsets(yearlyLoad~.,data=eco.model)
+# selection2<-which.min(summary(tryfit.eco)$bic)
+# fit.eco<-lm.regsubsets(tryfit.eco,selection2)
+
 plot(seq(2007,2016,by=1),load.bar,type="b",xlab="Year",ylab="Yearly load")
-lines(seq(2007,2016,by=1),fit.eco$fitted.values,type="b",col="red")
+lines(seq(2007,2016,by=1),fit.eco,type="b",col="red")
 legend("topright",c("original data","fitted data"),col=c("black","red"),lty=c(1,1),bty="n")
+
+# lines(seq(2007,2016,by=1),fit.eco$fitted.values,type="b",col="red")
+# 
 
 # Get future eco data
 start<-which(time=="2017")
 end<-which(time=="2026")
 new.Data<-eco.Data[start:end,]
 
+predictedLoad<-predict(tryfit.eco,new.Data,ncomp=ncomp)
+
+
 # Predict future load trend
-predictedLoad<-predict(fit.eco,new.Data)
-plot(seq(2007,2026,by=1),c(load.bar,predict(fit.eco,new.Data)),xlab="Time",ylab="Yearly Load",main="Yearly load forecast")
-lines(seq(2007,2016,by=1),fit.eco$fitted.values,type="b",col="red")
+# predictedLoad<-predict(fit.eco,new.Data)
+#plot(seq(2007,2026,by=1),c(load.bar,predict(fit.eco,new.Data)),xlab="Time",ylab="Yearly Load",main="Yearly load forecast")
+
+plot(seq(2007,2026,by=1),c(load.bar,predictedLoad),xlab="Time",ylab="Yearly Load",main="Yearly load forecast")
+lines(seq(2007,2016,by=1),fit.eco,type="b",col="red")
+#lines(seq(2007,2016,by=1),fit.eco$fitted.values,type="b",col="red")
 abline(v=2016,col="red",lty=2)
 
 # Fit monthly weather model
