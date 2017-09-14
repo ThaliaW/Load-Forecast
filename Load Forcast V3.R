@@ -12,16 +12,16 @@ library(HH)
 library(plsdepot)
 library(pls)
 
-ct<-"Blakely"
-city<-"Blakely"
-zipCode<-18452
+ct<-"Berlin"
+city<-"Berlin"
+zipCode<-15530
 
 #Get the historical load data(monthly)
 data<-read.csv("historical load.csv",header=TRUE,sep=",")
 ncol<-which(colnames(data)==ct)
 load<-as.character(data[,ncol])
 for (i in 1:length(load)){
-  load[i]<- paste0(substr(load[i],1,1),substr(load[i],3,nchar(load[i])))
+  load[i]<-gsub('\\,', '', load[i])
 }
 ts<-ts(na.omit(as.numeric(load)),start=c(2007,1),end=c(2017,0),frequency=12)
 
@@ -34,12 +34,18 @@ load.bar<-c(mean(window(ts, start=c(2007,1), end=c(2008,0))),mean(window(ts, sta
             mean(window(ts, start=c(2016,1), end=c(2017,0))))
 
 # Monthly normalized load
-load.dot<-rbind(window(ts, start=c(2007,1), end=c(2008,0))/load.bar[1],window(ts, start=c(2008,1), end=c(2009,0))/load.bar[1],window(ts, start=c(2009,1), end=c(2010,0))/load.bar[1],
-                window(ts, start=c(2010,1), end=c(2011,0))/load.bar[1],window(ts, start=c(2011,1), end=c(2012,0))/load.bar[1],window(ts, start=c(2012,1), end=c(2013,0))/load.bar[1],
-                window(ts, start=c(2013,1), end=c(2014,0))/load.bar[1],window(ts, start=c(2014,1), end=c(2015,0))/load.bar[1],window(ts, start=c(2015,1), end=c(2016,0))/load.bar[1],
-                window(ts, start=c(2016,1), end=c(2017,0))/load.bar[1])
+load.dot<-rbind(window(ts, start=c(2007,1), end=c(2008,0))/load.bar[1],window(ts, start=c(2008,1), end=c(2009,0))/load.bar[2],window(ts, start=c(2009,1), end=c(2010,0))/load.bar[3],
+                window(ts, start=c(2010,1), end=c(2011,0))/load.bar[4],window(ts, start=c(2011,1), end=c(2012,0))/load.bar[5],window(ts, start=c(2012,1), end=c(2013,0))/load.bar[6],
+                window(ts, start=c(2013,1), end=c(2014,0))/load.bar[7],window(ts, start=c(2014,1), end=c(2015,0))/load.bar[8],window(ts, start=c(2015,1), end=c(2016,0))/load.bar[9],
+                window(ts, start=c(2016,1), end=c(2017,0))/load.bar[10])
 
-histload<-data.frame(ts,load.bar,load.dot)
+load.dot<-log(load.dot)
+load.bar<-log(load.bar)
+
+par(mfrow=c(3,1))
+plot(log(ts),main="Monthly Historical load",ylab="Load")
+plot(seq(2007,2017,length=120),load.dot,type="b",main="Monthly normalized load",ylab="Load",xlab="Time")
+plot(seq(2007,2016,by=1),load.bar,type="b",main="Yearly average load",ylab="Load",xlab="Time")
 
 #Get historical weather data(monthly)
 AMP.Member<-read.csv("city info.csv",header=TRUE,sep=",")
@@ -98,69 +104,67 @@ monHDD<-as.vector(t(monHDD))
 load.dot<-as.vector(t(load.dot))
 weather.Model<-data.frame(load.dot,maxTemp,meanTemp,minTemp,meanHumi,monCDD,monHDD)
 
-write.table(weather.Model,paste(ct,"Weather Data.csv"),row.names=FALSE,sep=",")#Get the Econometric data
-
 plot(maxTemp,type="l",col="red",main="Historical weather data",xlab="Time")
 lines(meanTemp,type="l")
 lines(minTemp,type="l",col="blue")
 legend("topright",c("Maximum Temperature","Mean Temperature","Minimum Temperature"),col=c("red","black","blue"),lty=c(1,1,1),bty="n")
+
 
 par(mfrow=c(2,1))
 plot(monHDD,type="l",col="red",main="Historical HDD",xlab="Time")
 plot(monCDD,type="l",col="blue",main="Historical CDD",xlab="Time")
 par(mfrow=c(1,1))
 
-tryfit.weather<-regsubsets(load.dot~.,data=weather.Model)
-selection<-which.min(summary(tryfit.weather)$bic)
-fit.weather<-lm.regsubsets(tryfit.weather,selection)
+# Fit weather-demand sub-model
 
-plot(load.dot,type="l",xlab="Year",ylab="Monthlty load")
-lines(fit.weather$fitted.values,type="b",col="red")
+tryfit.weather<-plsr(load.dot~.,data=weather.Model,validation="CV")
+ncomp0<-which.min(tryfit.weather$validation$adj)
+fit.weather<-tryfit.weather$fitted.values[,,ncomp0]
+
+plot(seq(2007,2017,length=120),load.dot,type="l",xlab="Year",ylab="Yearly load")
+lines(seq(2007,2017,length=120),fit.weather,type="b",col="red")
 legend("topright",c("original data","fitted data"),col=c("black","red"),lty=c(1,1),bty="n")
-#We have monthly maxTemp, meanTemp, minTemp, meanHumi, monHDD, monCDD
 
-# Get future weather data
-d<-12
-N<-length(ts)
-n<-round(N/d,0)
-b<-2
-k<-round(n/b,0)
-l<-k*b*d
-i<-sample(1:k)
-new.weather<-data.frame("maxTemp"=c(),"meanTemp"=c(),"minTemp"=c(),"meanHumi"=c(),"monCDD"=c(),"monHDD"=c())
+temp<-matrix(0,nrow=12,ncol=6)
 
-for(m in 1:k){
-  for(j in 1:(b*d)){
-    new.weather[(m-1)*b*d+j,"maxTemp"]<-weather.Model[i[m]*d+j-1,"maxTemp"]
-    new.weather[(m-1)*b*d+j,"meanTemp"]<-weather.Model[i[m]*d+j-1,"meanTemp"]
-    new.weather[(m-1)*b*d+j,"minTemp"]<-weather.Model[i[m]*d+j-1,"minTemp"]
-    new.weather[(m-1)*b*d+j,"meanHumi"]<-weather.Model[i[m]*d+j-1,"meanHumi"]
-    new.weather[(m-1)*b*d+j,"monCDD"]<-weather.Model[i[m]*d+j-1,"monCDD"]
-    new.weather[(m-1)*b*d+j,"monHDD"]<-weather.Model[i[m]*d+j-1,"monHDD"]
-  }
+for(m in 1:12){
+  for(n in 1:10){
+      temp[m,]<-temp[m,]+as.matrix(weather.Model)[,-1][12*(n-1)+m,]
+  } 
 }
 
-predict.Weather<-predict(fit.weather,new.weather)
+temp<-temp/10
+new.weather<-rbind(temp,temp,temp,temp,temp,temp,temp,temp,temp,temp)
+colnames(new.weather)<-c("maxTemp","meanTemp","minTemp","meanHumi","monCDD","monHDD")
 
-par(mfrow=c(2,1))
-plot(meanTemp,type="l",col="red",main="Historical meanTemp",xlab="Time")
-plot.ts(ts(new.weather["meanTemp"]),main="Future meanTemp")
+par(mfrow=c(4,1))
+
+plot(meanTemp,type="l",main="Historical meanTemp",xlab="Time")
+lines(new.weather[,"meanTemp"],col="red")
+legend("topright",c("Average meanTemp","hitorical meanTemp"),col=c("red","black"),lty=c(1,1),bty="n")
+
+plot(meanHumi,type="l",main="Historical meanHumi",xlab="Time")
+lines(new.weather[,"meanHumi"],col="red")
+legend("topright",c("Average meanHumi","hitorical meanHumi"),col=c("red","black"),lty=c(1,1),bty="n")
+
+plot(monHDD,type="l",main="Historical HDD",xlab="Time")
+lines(new.weather[,"monHDD"],col="red")
+legend("topright",c("Average monHDD","hitorical monHDD"),col=c("red","black"),lty=c(1,1),bty="n")
+
+plot(monCDD,type="l",main="Historical CDD",xlab="Time")
+lines(new.weather[,"monCDD"],col="red")
+legend("topright",c("Average monCDD","hitorical monCDD"),col=c("red","black"),lty=c(1,1),bty="n")
+
 par(mfrow=c(1,1))
 
-par(mfrow=c(2,1))
-plot(meanHumi,type="l",col="red",main="Historical meanHumi",xlab="Time")
-plot.ts(ts(new.weather["meanHumi"]),main="Future meanHumi ")
-par(mfrow=c(1,1))
 
-par(mfrow=c(2,1))
-plot(monHDD,type="l",col="red",main="Historical HDD",xlab="Time")
-plot.ts(ts(new.weather["monHDD"]),main="Future HDD ")
-par(mfrow=c(1,1))
+# Predict future weather 
+predict.Weather<-predict(tryfit.weather,new.weather,ncomp=ncomp0)
 
-par(mfrow=c(2,1))
-plot(monCDD,type="l",col="red",main="Historical CDD",xlab="Time")
-plot.ts(ts(new.weather["monCDD"]),main="Future CDD ")
-par(mfrow=c(1,1))
+plot(seq(2007,2027,length=240),c(load.dot,predict.Weather),xlab="Time",ylab="Monthly Load",main="monthly load forecast",type="l")
+#lines(seq(2007,2017,length=120),fit.weather,type="b",col="red")
+abline(v=2017,col="red",lty=2)
+abline(h=predict.Weather[1],col="red",lty=2)
 
 #Get historical eco data(yearly)
 
@@ -177,11 +181,19 @@ totalRetail<-as.numeric(t(ecoData[111,-1]))
 time<-as.character(t(ecoData[2,-1]))
 eco.Data<-data.frame(time,totalPopulation,totalEmployment,totalHouseholds,totalRetail)
 
+
 start<-which(time=="2007")
 end<-which(time=="2016")
 hiseco.Data<-eco.Data[start:end,]
 
-corrplot.mixed(cor(hiseco.Data[,2:5]),upper="ellipse")
+par(mfrow=c(2,2))
+plot(hiseco.Data[,2],type="b",main="Total Population",ylab="Population")
+plot(hiseco.Data[,3],type="b",main="Total Employment",ylab="Employment")
+plot(hiseco.Data[,4],type="b",main="Total Households",ylab="Housholds")
+plot(hiseco.Data[,5],type="b",main="Total Retail sales",ylab="Retail sales")
+par(mfrow=c(1,1))
+
+plot(corrplot.mixed(cor(hiseco.Data[,2:5]),upper="ellipse"))
 
 # Fit Yealy eco model (multivariate linear model)
 eco.model<-data.frame(load.bar,hiseco.Data[,2:5])
@@ -191,50 +203,59 @@ tryfit.eco<-plsr(yearlyLoad~.,data=eco.model,validation="CV")
 ncomp<-which.min(tryfit.eco$validation$adj)
 fit.eco<-tryfit.eco$fitted.values[,,ncomp]
 
-
-# tryfit.eco<-regsubsets(yearlyLoad~.,data=eco.model)
-# selection2<-which.min(summary(tryfit.eco)$bic)
-# fit.eco<-lm.regsubsets(tryfit.eco,selection2)
-
-plot(seq(2007,2016,by=1),load.bar,type="b",xlab="Year",ylab="Yearly load")
-lines(seq(2007,2016,by=1),fit.eco,type="b",col="red")
+plot(seq(2007,2016,length=10),load.bar,type="b",xlab="Year",ylab="Yearly load")
+lines(seq(2007,2016,length=10),fit.eco,type="b",col="red")
 legend("topright",c("original data","fitted data"),col=c("black","red"),lty=c(1,1),bty="n")
 
-# lines(seq(2007,2016,by=1),fit.eco$fitted.values,type="b",col="red")
-# 
 
 # Get future eco data
 start<-which(time=="2017")
 end<-which(time=="2026")
 new.Data<-eco.Data[start:end,]
 
+par(mfrow=c(2,2))
+plot(new.Data[,2],type="b",main="Future Total Population",ylab="Population")
+plot(new.Data[,3],type="b",main="Future Total Employment",ylab="Employment")
+plot(new.Data[,4],type="b",main="Future Total Households",ylab="Housholds")
+plot(new.Data[,5],type="b",main="Future Total Retail sales",ylab="Retail sales")
+par(mfrow=c(1,1))
+
 predictedLoad<-predict(tryfit.eco,new.Data,ncomp=ncomp)
 
-
-# Predict future load trend
-# predictedLoad<-predict(fit.eco,new.Data)
-#plot(seq(2007,2026,by=1),c(load.bar,predict(fit.eco,new.Data)),xlab="Time",ylab="Yearly Load",main="Yearly load forecast")
-
+# Predict future load trend]
 plot(seq(2007,2026,by=1),c(load.bar,predictedLoad),xlab="Time",ylab="Yearly Load",main="Yearly load forecast")
 lines(seq(2007,2016,by=1),fit.eco,type="b",col="red")
-#lines(seq(2007,2016,by=1),fit.eco$fitted.values,type="b",col="red")
 abline(v=2016,col="red",lty=2)
 
 # Fit monthly weather model
 
 pre<-c()
 for(i in 1:10){
-  pre<-c(pre,predict.Weather[(12*(i-1)+1):(12*i)]*predictedLoad[i])
+  pre<-c(pre,exp(predict.Weather[(12*(i-1)+1):(12*i)])*exp(predictedLoad[i]))
 }
 
-plot(seq(2017,2026,length=120),pre,type="l",col="red",xlab="Time",ylab="Load KWH",main="Load Forecast from 2017 to 2026")
+plot(seq(2017,2027,length=120),pre,type="l",col="red",xlab="Time",ylab="Load KWH",main="Load Forecast from 2017 to 2026")
 
-prediction<-ts(pre,start=c(2017,1),end=c(2026,12),frequency=12)
+wholedata<-ts(c(ts,pre),start=c(2007,1),end=c(2026,12),frequency=12)
 
-wholedata<-ts(c(ts,pre))
-plot.ts(seq(2007,2026,length=240),wholedata,ylab="Load",type="l",xlab="Time",main="Historical & Future load")
+plot(seq(2007,2027,length=240),wholedata,ylab="Load",type="l",xlab="Time",main="Historical & Future load (Monthly)")
+abline(v=2017,col="red",lty=2)
+
+#write.table(as.data.frame(prediction),paste("prediction for",city,".csv"),sep=",",row.names=as.Date(prediction),col.names=FALSE)
+
+yearlyload<-c(sum(window(wholedata, start=c(2007,1), end=c(2008,0))),sum(window(wholedata, start=c(2008,1), end=c(2009,0))),sum(window(wholedata, start=c(2009,1), end=c(2010,0))),
+              sum(window(wholedata, start=c(2010,1), end=c(2011,0))),sum(window(wholedata, start=c(2011,1), end=c(2012,0))),sum(window(wholedata, start=c(2012,1), end=c(2013,0))),
+              sum(window(wholedata, start=c(2013,1), end=c(2014,0))),sum(window(wholedata, start=c(2014,1), end=c(2015,0))),sum(window(wholedata, start=c(2015,1), end=c(2016,0))),
+              sum(window(wholedata, start=c(2016,1), end=c(2017,0))),sum(window(wholedata, start=c(2017,1), end=c(2018,0))),sum(window(wholedata, start=c(2018,1), end=c(2019,0))),
+              sum(window(wholedata, start=c(2019,1), end=c(2020,0))),sum(window(wholedata, start=c(2020,1), end=c(2021,0))),sum(window(wholedata, start=c(2021,1), end=c(2022,0))),
+              sum(window(wholedata, start=c(2022,1), end=c(2023,0))),sum(window(wholedata, start=c(2023,1), end=c(2024,0))),sum(window(wholedata, start=c(2024,1), end=c(2025,0))),
+              sum(window(wholedata, start=c(2025,1), end=c(2026,0))),sum(window(wholedata, start=c(2026,1), end=c(2026,12))))
+
+plot(seq(2007,2026,length=20),yearlyload,type="b",xlab="Time",main="Historical & Future load (Yearly)")
 abline(v=2016,col="red",lty=2)
-write.table(as.data.frame(prediction),"predicted.csv",sep=",",row.names=as.Date(prediction),col.names=FALSE)
 
-hiseco.Data
-new.Data
+yearlyload<-ts(yearlyload,start=2007,end=2026,frequency=1)
+write.table(as.data.frame(yearlyload),paste("prediction for",city,".csv"),sep=",",row.names=as.character(seq(2007,2026,length=20)),col.names=FALSE)
+
+
+
