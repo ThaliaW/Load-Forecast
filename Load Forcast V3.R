@@ -14,7 +14,7 @@ library(scales)
 # LoadForecast<-function(cityName){
 #   city<-cityName
  
-  city<-"Berlin-MD"
+  city<-"Blakely"
   ct<-chartr(" ", ".", city)
   ct<-chartr("-", ".", ct)
   
@@ -30,9 +30,13 @@ library(scales)
   
   if (length(isna)!=0){
     start<-as.numeric(which.max(as.numeric(as.character(isna))))
-    WhichYear.start<-2007+round(start/12,0)
-    load<-load[(start+1):length(load)]
-    WhichYear.end<-WhichYear.start+round(length(load)/12,0)-1
+    WhichYear.start<-2007+ceiling(start/12)
+    load<-load[(ceiling(start/12)*12+1):length(load)]
+    WhichYear.end<-WhichYear.start+floor(length(load)/12)-1
+    load<-load[1:((WhichYear.end-WhichYear.start+1)*12)]
+    no.Years<-length(load)/12
+    
+    
     yearsY<-seq(WhichYear.start,WhichYear.end,by=1)
     yearsM<-seq(WhichYear.start,WhichYear.end+1,length=12*length(yearsY))
     ts<-ts(load[1:length(yearsM)],start=c(WhichYear.start,1),end=c(WhichYear.end,12),frequency=12)
@@ -211,77 +215,75 @@ library(scales)
   time<-as.character(t(ecoData[2,-1]))
   eco.Data<-data.frame(time,totalPopulation,totalEmployment,totalHouseholds,totalRetail)
   
-  start<-which(time=="2007")
-  end<-which(time=="2016")
+  start<-which(time==WhichYear.start)
+  end<-which(time==WhichYear.end)
   hiseco.Data<-eco.Data[start:end,]
   
   par(mfrow=c(2,2))
-  plot(seq(2007,2016,by=1),hiseco.Data[,2],type="b",main="Total Population",ylab="Population",xlab="Time")
-  plot(seq(2007,2016,by=1),hiseco.Data[,3],type="b",main="Total Employment",ylab="Employment",xlab="Time")
-  plot(seq(2007,2016,by=1),hiseco.Data[,4],type="b",main="Total Households",ylab="Housholds",xlab="Time")
-  plot(seq(2007,2016,by=1),hiseco.Data[,5],type="b",main="Total Retail sales",ylab="Retail sales",xlab="Time")
+  plot(yearsY,hiseco.Data[,2],type="b",main="Total Population",ylab="Population",xlab="Time")
+  plot(yearsY,hiseco.Data[,3],type="b",main="Total Employment",ylab="Employment",xlab="Time")
+  plot(yearsY,hiseco.Data[,4],type="b",main="Total Households",ylab="Housholds",xlab="Time")
+  plot(yearsY,hiseco.Data[,5],type="b",main="Total Retail sales",ylab="Retail sales",xlab="Time")
   par(mfrow=c(1,1))
-
-  corrplot.mixed(cor(hiseco.Data[,2:5]),upper="ellipse")
   
   # Fit Yealy eco model (multivariate linear model)
   eco.model<-data.frame(load.bar,hiseco.Data[,2:5])
   colnames(eco.model)<-c("yearlyLoad","totalPopulation","totalEmployment","totalHouseholds","totalRetail")
   
-  tryfit.eco<-plsr(yearlyLoad~.,data=eco.model,validation="CV")
+  tryfit.eco<-plsr(yearlyLoad~.,data=eco.model,validation="LOO")
   ncomp<-which.min(tryfit.eco$validation$adj)
   fit.eco<-tryfit.eco$fitted.values[,,ncomp]
   
-  plot(seq(2007,2016,length=10),load.bar,type="b",xlab="Year",ylab="Yearly load")
-  lines(seq(2007,2016,length=10),fit.eco,type="b",col="red")
+  plot(yearsY,load.bar,type="b",xlab="Year",ylab="Yearly load")
+  lines(yearsY,fit.eco,type="b",col="red")
   legend("topright",c("original data","fitted data"),col=c("black","red"),lty=c(1,1),bty="n")
 
   # Get future eco data
-  start.whole<-which(time=="2007")
-  end.whole<-which(time=="2026")
+  start.whole<-which(time==WhichYear.start)
+  end.whole<-which(time==WhichYear.end+10)
   Wholeco.Data<-eco.Data[start.whole:end.whole,]
   
   par(mfrow=c(2,2))
-  plot(seq(2007,2026,by=1),Wholeco.Data[,2],xaxt = "n",type="b",main="Future Total Population",ylab="Population",xlab="Time")
-  axis(side = 1, seq(2007,2026,by=1))
+  plot(seq(WhichYear.start,WhichYear.end+10,by=1),Wholeco.Data[,2],xaxt = "n",type="b",main="Future Total Population",ylab="Population",xlab="Time")
+  axis(side = 1, seq(WhichYear.start,WhichYear.end+10,by=1))
   abline(v=2016,col="red",lty=2)
-  plot(seq(2007,2026,by=1),Wholeco.Data[,3],xaxt = "n",type="b",main="Future Total Employment",ylab="Employment",xlab="Time")
-  axis(side = 1, seq(2007,2026,by=1))
+  plot(seq(WhichYear.start,WhichYear.end+10,by=1),Wholeco.Data[,3],xaxt = "n",type="b",main="Future Total Employment",ylab="Employment",xlab="Time")
+  axis(side = 1, seq(WhichYear.start,WhichYear.end+10,by=1))
   abline(v=2016,col="red",lty=2)
-  plot(seq(2007,2026,by=1),Wholeco.Data[,4],xaxt = "n",type="b",main="Future Total Households",ylab="Housholds",xlab="Time")
-  axis(side = 1, seq(2007,2026,by=1))
+  plot(seq(WhichYear.start,WhichYear.end+10,by=1),Wholeco.Data[,4],xaxt = "n",type="b",main="Future Total Households",ylab="Housholds",xlab="Time")
+  axis(side = 1, seq(WhichYear.start,WhichYear.end+10,by=1))
   abline(v=2016,col="red",lty=2)
-  plot(seq(2007,2026,by=1),Wholeco.Data[,5],xaxt = "n",type="b",main="Future Total Retail sales",ylab="Retail sales",xlab="Time")
-  axis(side = 1, seq(2007,2026,by=1))
+  plot(seq(WhichYear.start,WhichYear.end+10,by=1),Wholeco.Data[,5],xaxt = "n",type="b",main="Future Total Retail sales",ylab="Retail sales",xlab="Time")
+  axis(side = 1, seq(WhichYear.start,WhichYear.end+10,by=1))
   abline(v=2016,col="red",lty=2)
   par(mfrow=c(1,1))
   
-  start<-which(time=="2017")
-  end<-which(time=="2026")
+  start<-which(time==WhichYear.end+1)
+  end<-which(time==WhichYear.end+10)
   new.Data<-eco.Data[start:end,]
   
   predictedLoad<-predict(tryfit.eco,new.Data,ncomp=ncomp)
   
   # Predict future load trend]
   
-  normalize<-fit.eco[10]-load.bar[10]
+  normalize<-tail(fit.eco,1)-tail(load.bar,1)
   predictedLoad<-predictedLoad-normalize
   
-  plot(seq(2007,2026,by=1),c(load.bar,predictedLoad),xlab="Time",ylab="Yearly Load",main="Yearly load forecast")
-  lines(seq(2007,2016,by=1),fit.eco,type="b",col="red")
+  plot(seq(WhichYear.start,WhichYear.end+10,by=1),c(load.bar,predictedLoad),xlab="Time",ylab="Yearly Load",main="Yearly load forecast")
+  lines(seq(WhichYear.start,WhichYear.end,by=1),fit.eco,type="b",col="red")
   abline(v=2016,col="red",lty=2)
 
   # Fit monthly weather model
   
   pre.historical<-c()
-  for(i in 1:10){
-    pre.historical<-c(pre.historical,fit.weather[(12*(i-1)+1):(12*i)]+fit.eco[i])
+  for(i in 1:length(yearsY)){
+    pre.historical<-c(pre.historical,fit.weather[(12*(i-1)+1):(12*i)]+as.numeric(fit.eco)[i])
   }
   
   pre.historical<-exp(pre.historical)
   
   plot(ts,type="l")
-  lines(seq(2007,2017,length=120),pre.historical,col="red",type="l")
+  lines(yearsM,pre.historical,col="red",type="l")
   legend("topright",c("original data","fitted data"),col=c("black","red"),lty=c(1,1),bty="n")
   
   pre<-c()
@@ -291,29 +293,29 @@ library(scales)
   
   pre<-exp(pre)
 
-  plot(seq(2017,2027,length=120),pre,type="l",col="red",xlab="Time",ylab="Load KWH",main="Load Forecast from 2017 to 2026")
+  plot(seq(WhichYear.end+1,WhichYear.end+10,length=120),pre,type="l",col="red",xlab="Time",ylab="Load KWH",main="Load Forecast from 2017 to 2026")
 
-  wholedata<-ts(c(ts,pre),start=c(2007,1),end=c(2026,12),frequency=12)
+  wholedata<-ts(c(ts,pre),start=c(WhichYear.start,1),end=c(WhichYear.end+10,12),frequency=12)
   
-  plot(seq(2007,2027,length=240),wholedata,ylab="Load",type="l",xlab="Time",main="Historical & Future load (Monthly)")
+  plot(wholeTime,wholedata,ylab="Load",type="l",xlab="Time",main="Historical & Future load (Monthly)")
   abline(v=2017,col="red",lty=2)
   
-  yearlyload<-c(sum(window(wholedata, start=c(2007,1), end=c(2008,0))),sum(window(wholedata, start=c(2008,1), end=c(2009,0))),sum(window(wholedata, start=c(2009,1), end=c(2010,0))),
-                sum(window(wholedata, start=c(2010,1), end=c(2011,0))),sum(window(wholedata, start=c(2011,1), end=c(2012,0))),sum(window(wholedata, start=c(2012,1), end=c(2013,0))),
-                sum(window(wholedata, start=c(2013,1), end=c(2014,0))),sum(window(wholedata, start=c(2014,1), end=c(2015,0))),sum(window(wholedata, start=c(2015,1), end=c(2016,0))),
-                sum(window(wholedata, start=c(2016,1), end=c(2017,0))),sum(window(wholedata, start=c(2017,1), end=c(2018,0))),sum(window(wholedata, start=c(2018,1), end=c(2019,0))),
-                sum(window(wholedata, start=c(2019,1), end=c(2020,0))),sum(window(wholedata, start=c(2020,1), end=c(2021,0))),sum(window(wholedata, start=c(2021,1), end=c(2022,0))),
-                sum(window(wholedata, start=c(2022,1), end=c(2023,0))),sum(window(wholedata, start=c(2023,1), end=c(2024,0))),sum(window(wholedata, start=c(2024,1), end=c(2025,0))),
-                sum(window(wholedata, start=c(2025,1), end=c(2026,0))),sum(window(wholedata, start=c(2026,1), end=c(2026,12))))
+  wholeyears<-seq(WhichYear.start,WhichYear.end+10,by=1)
   
-  plot(seq(2007,2026,length=20),yearlyload,xaxt = "n",type="b",xlab="Time",main="Historical & Future load (Yearly)")
-  axis(side = 1, seq(2007,2026,by=1))
+  yearlyload<-c()
+  for(i in wholeyears){
+    yearlyload<-c(yearlyload,sum(window(wholedata, start=c(i,1), end=c(i+1,0))))
+  }
+  
+    
+  plot(seq(WhichYear.start,WhichYear.end+10,length=length(yearsY)+10),yearlyload,xaxt = "n",type="b",xlab="Time",main="Historical & Future load (Yearly)")
+  axis(side = 1, yearsY)
   abline(v=2016,col="red",lty=2)
   
-  yearlyload<-ts(yearlyload,start=2007,end=2026,frequency=1)
+  yearlyload<-ts(yearlyload,start=WhichYear.start,end=WhichYear.end+10,frequency=1)
   percentGrowth<-as.numeric(diff(yearlyload)/lag(yearlyload,-1))
   percentGrowth<-c(NA,percent(percentGrowth))
-  write.table(data.frame("Time"=seq(2007,2026,by=1),"Yearly Load"=yearlyload,"Percent Growth"=percentGrowth),paste("prediction for",city,".csv"),sep=",",row.names=FALSE,col.names=TRUE)
+  write.table(data.frame("Time"=wholeyears,"Yearly Load"=yearlyload,"Percent Growth"=percentGrowth),paste("prediction for",city,".csv"),sep=",",row.names=FALSE,col.names=TRUE)
   
-}
+
 
