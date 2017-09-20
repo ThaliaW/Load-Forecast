@@ -27,55 +27,70 @@ library(scales)
   }
   load<-as.numeric(load)
   isna<-which(is.na(load))
-  start<-as.numeric(which.max(as.numeric(as.character(isna))))
-  WhichYear.start<-2007+round(start/12,0)
-  load<-load[(start+1):length(load)]
-  WhichYear.end<-WhichYear.start+round(length(load)/12,0)
-  ts<-ts(na.omit(as.numeric(load)),start=c(WhichYear.start,1),end=c(WhichYear.end,12),frequency=12)
-
+  
+  if (length(isna)!=0){
+    start<-as.numeric(which.max(as.numeric(as.character(isna))))
+    WhichYear.start<-2007+round(start/12,0)
+    load<-load[(start+1):length(load)]
+    WhichYear.end<-WhichYear.start+round(length(load)/12,0)-1
+    yearsY<-seq(WhichYear.start,WhichYear.end,by=1)
+    yearsM<-seq(WhichYear.start,WhichYear.end+1,length=12*length(yearsY))
+    ts<-ts(load[1:length(yearsM)],start=c(WhichYear.start,1),end=c(WhichYear.end,12),frequency=12)
+    
+    load.bar<-c()
+    
+    for(i in yearsY){
+      load.bar<-c(load.bar,mean(window(ts, start=c(i,1), end=c(i+1,0))))
+    }
+    
+    load.dot<-c()
+    
+    for(i in yearsY){
+        load.dot<-c(load.dot,window(ts, start=c(i,1), end=c(i+1,0))/load.bar[i-WhichYear.start+1])
+        }
+    
+    } else{
+    yearsY<-seq(2007,2016,by=1)
+    yearsM<-seq(2007,2017,length=120)
+    ts<-ts(as.numeric(load),start=c(2007,1),end=c(2016,12),frequency=12)
+    # Yearly mean load
+    load.bar<-c(mean(window(ts, start=c(2007,1), end=c(2008,0))),mean(window(ts, start=c(2008,1), end=c(2009,0))),mean(window(ts, start=c(2009,1), end=c(2010,0))),
+                mean(window(ts, start=c(2010,1), end=c(2011,0))),mean(window(ts, start=c(2011,1), end=c(2012,0))),mean(window(ts, start=c(2012,1), end=c(2013,0))),
+                mean(window(ts, start=c(2013,1), end=c(2014,0))),mean(window(ts, start=c(2014,1), end=c(2015,0))),mean(window(ts, start=c(2015,1), end=c(2016,0))),
+                mean(window(ts, start=c(2016,1), end=c(2017,0))))
+    
+    # Monthly normalized load
+    load.dot<-c(window(ts, start=c(2007,1), end=c(2008,0))/load.bar[1],window(ts, start=c(2008,1), end=c(2009,0))/load.bar[2],window(ts, start=c(2009,1), end=c(2010,0))/load.bar[3],
+                window(ts, start=c(2010,1), end=c(2011,0))/load.bar[4],window(ts, start=c(2011,1), end=c(2012,0))/load.bar[5],window(ts, start=c(2012,1), end=c(2013,0))/load.bar[6],
+                window(ts, start=c(2013,1), end=c(2014,0))/load.bar[7],window(ts, start=c(2014,1), end=c(2015,0))/load.bar[8],window(ts, start=c(2015,1), end=c(2016,0))/load.bar[9],
+                window(ts, start=c(2016,1), end=c(2017,0))/load.bar[10])
+  }
   
   #Do a normalization of monthly load data
-  
-  # Yearly mean load
-  load.bar<-c(mean(window(ts, start=c(2007,1), end=c(2008,0))),mean(window(ts, start=c(2008,1), end=c(2009,0))),mean(window(ts, start=c(2009,1), end=c(2010,0))),
-              mean(window(ts, start=c(2010,1), end=c(2011,0))),mean(window(ts, start=c(2011,1), end=c(2012,0))),mean(window(ts, start=c(2012,1), end=c(2013,0))),
-              mean(window(ts, start=c(2013,1), end=c(2014,0))),mean(window(ts, start=c(2014,1), end=c(2015,0))),mean(window(ts, start=c(2015,1), end=c(2016,0))),
-              mean(window(ts, start=c(2016,1), end=c(2017,0))))
-  
-  # Monthly normalized load
-  load.dot<-c(window(ts, start=c(2007,1), end=c(2008,0))/load.bar[1],window(ts, start=c(2008,1), end=c(2009,0))/load.bar[2],window(ts, start=c(2009,1), end=c(2010,0))/load.bar[3],
-                  window(ts, start=c(2010,1), end=c(2011,0))/load.bar[4],window(ts, start=c(2011,1), end=c(2012,0))/load.bar[5],window(ts, start=c(2012,1), end=c(2013,0))/load.bar[6],
-                  window(ts, start=c(2013,1), end=c(2014,0))/load.bar[7],window(ts, start=c(2014,1), end=c(2015,0))/load.bar[8],window(ts, start=c(2015,1), end=c(2016,0))/load.bar[9],
-                  window(ts, start=c(2016,1), end=c(2017,0))/load.bar[10])
-  load.dot[is.na(load.dot)] <- 0
-  
+
   load.dot<-log(load.dot)
-  load.dot[load.dot==-Inf]<-0
-  load.dot[is.na(load.dot)] <- 0
-  
   load.bar<-log(load.bar)
-  load.bar[load.bar==-Inf]<-0
-  load.bar[is.na(load.bar)] <- 0
-  
+
   par(mfrow=c(3,1))
   plot(log(ts),main="Monthly Historical load",ylab="Load")
-  plot(seq(2007,2017,length=120),load.dot,type="b",main="Monthly normalized load",ylab="Load",xlab="Time")
-  plot(seq(2007,2016,by=1),load.bar,type="b",main="Yearly average load",ylab="Load",xlab="Time")
+  plot(yearsM,load.dot,type="b",main="Monthly normalized load",ylab="Load",xlab="Time")
+  plot(yearsY,load.bar,type="b",main="Yearly average load",ylab="Load",xlab="Time")
   par(mfrow=c(1,1))
   
   #Get historical weather data(monthly)
   AMP.Member<-read.csv("city info.csv",header=TRUE,sep=",")
   rowindex<-which(AMP.Member["City"]==city)
   airport<-AMP.Member[rowindex,3]
-  year<-seq(2007,2016,by=1)
+  
+  year<-yearsY
   month<-seq(1,12,by=1)
   
-  maxTemp<-matrix(0,nrow=10,ncol=12)
-  meanTemp<-matrix(0,nrow=10,ncol=12)
-  minTemp<-matrix(0,nrow=10,ncol=12)
-  meanHumi<-matrix(0,nrow=10,ncol=12)
-  monCDD<-matrix(0,nrow=10,ncol=12)
-  monHDD<-matrix(0,nrow=10,ncol=12)
+  maxTemp<-matrix(0,nrow=length(year),ncol=12)
+  meanTemp<-matrix(0,nrow=length(year),ncol=12)
+  minTemp<-matrix(0,nrow=length(year),ncol=12)
+  meanHumi<-matrix(0,nrow=length(year),ncol=12)
+  monCDD<-matrix(0,nrow=length(year),ncol=12)
+  monHDD<-matrix(0,nrow=length(year),ncol=12)
   
   for(i in 1:length(year)){
     for(j in 1:length(month)){
@@ -120,14 +135,14 @@ library(scales)
   load.dot<-as.vector(t(load.dot))
   weather.Model<-data.frame(load.dot,maxTemp,meanTemp,minTemp,meanHumi,monCDD,monHDD)
   
-  plot(maxTemp,type="l",col="red",main="Historical weather data",xlab="Time")
-  lines(meanTemp,type="l")
-  lines(minTemp,type="l",col="blue")
+  plot(yearsM,maxTemp,type="l",col="red",main="Historical weather data",xlab="Time")
+  lines(yearsM,meanTemp,type="l")
+  lines(yearsM,minTemp,type="l",col="blue")
   legend("topright",c("Maximum Temperature","Mean Temperature","Minimum Temperature"),col=c("red","black","blue"),lty=c(1,1,1),bty="n")
 
   par(mfrow=c(2,1))
-  plot(monHDD,type="l",col="red",main="Historical HDD",xlab="Time")
-  plot(monCDD,type="l",col="blue",main="Historical CDD",xlab="Time")
+  plot(yearsM,monHDD,type="l",col="red",main="Historical HDD",xlab="Time")
+  plot(yearsM,monCDD,type="l",col="blue",main="Historical CDD",xlab="Time")
   par(mfrow=c(1,1))
 
   # Fit weather-demand sub-model
@@ -136,19 +151,20 @@ library(scales)
   ncomp0<-which.min(tryfit.weather$validation$adj)
   fit.weather<-tryfit.weather$fitted.values[,,ncomp0]
 
-   plot(seq(2007,2017,length=120),load.dot,type="l",xlab="Year",ylab="Yearly load")
-   lines(seq(2007,2017,length=120),fit.weather,type="b",col="red")
+   plot(yearsM,load.dot,type="l",xlab="Year",ylab="Yearly load")
+   lines(yearsM,fit.weather,type="b",col="red")
    legend("topright",c("original data","fitted data"),col=c("black","red"),lty=c(1,1),bty="n")
   
   temp<-matrix(0,nrow=12,ncol=6)
   
   for(m in 1:12){
-    for(n in 1:10){
+    for(n in 1:length(yearsY)){
       temp[m,]<-temp[m,]+as.matrix(weather.Model)[,-1][12*(n-1)+m,]
     }
   }
   
-  temp<-temp/10
+  temp<-temp/length(yearsY)
+  
   new.weather<-rbind(temp,temp,temp,temp,temp,temp,temp,temp,temp,temp)
   colnames(new.weather)<-c("maxTemp","meanTemp","minTemp","meanHumi","monCDD","monHDD")
   
@@ -174,9 +190,10 @@ library(scales)
 
   # Predict future weather
   predict.Weather<-predict(tryfit.weather,new.weather,ncomp=ncomp0)
+  wholeTime<-seq(WhichYear.start,WhichYear.end+10,length=length(yearsM)+120)
   
-  plot(seq(2007,2027,length=240),c(load.dot,predict.Weather),xlab="Time",ylab="Monthly Load",main="monthly load forecast",type="l")
-  lines(seq(2007,2017,length=120),fit.weather,type="b",col="red")
+  plot(wholeTime,c(load.dot,predict.Weather),xlab="Time",ylab="Monthly Load",main="monthly load forecast",type="l")
+  lines(yearsM,fit.weather,type="b",col="red")
   abline(v=2017,col="red",lty=2)
 
   #Get historical eco data(yearly)
